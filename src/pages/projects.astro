@@ -1,0 +1,46 @@
+---
+import ProjectCard from "@components/ProjectCard.astro";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { getSortedPosts } from "@utils/content-utils";
+import { getPostUrlBySlug } from "@utils/url-utils";
+
+const projects = (await getSortedPosts()).filter(
+	(post) => post.data.category === "项目",
+);
+
+let delay = 0;
+const interval = 50;
+---
+<MainGridLayout title="项目" description="我的项目归档">
+	<div class="mb-6 flex flex-col gap-2">
+		<h1 class="text-3xl font-bold text-90">项目</h1>
+		<p class="text-75">做过的项目、正在进行的项目，还有已经放弃但值得记录的项目。</p>
+	</div>
+
+	{projects.length === 0 ? (
+		<div class="card-base rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
+			还没有项目文章，去「分类 → 项目」下面新建一篇吧。
+		</div>
+	) : (
+		<div class="card-base">
+			{projects.map((entry, index) => (
+				<ProjectCard
+					entry={entry}
+					title={entry.data.title}
+					tags={entry.data.tags}
+					published={entry.data.published}
+					updated={entry.data.updated}
+					url={getPostUrlBySlug(entry.slug)}
+					description={entry.data.description}
+					status={entry.data.status}
+					repo={entry.data.repo}
+					class:list={[
+						{ "border-t border-[var(--line-color)]": index > 0 },
+						"onload-animation",
+					]}
+					style={`animation-delay: calc(var(--content-delay) + ${delay++ * interval}ms);`}
+				/>
+			))}
+		</div>
+	)}
+</MainGridLayout>
