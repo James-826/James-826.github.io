@@ -33,6 +33,22 @@ repo: "https://github.com/James-826/仓库名" # 可选，项目文章填仓库�
 
 写项目文章时，把 `category` 设为 `项目`，项目页会自动把文章显示成项目卡片。
 
+## 快速发布
+
+本机发布只需两步：
+
+```sh
+pnpm new-post 文章名
+pnpm push
+```
+
+`pnpm new-post` 会在 `src/content/posts/` 生成带 frontmatter 的草稿，
+写完后运行 `pnpm push`，它会自动提交并推送，GitHub Actions 随后自动部署。
+
+不想用命令行的话，也可以直接打开 GitHub 仓库
+`src/content/posts/` 目录，点 `Add file` 新建文章，写完直接提交，
+同样会自动部署。
+
 ## 换背景图和头像
 
 背景图：替换 `src/assets/images/banner.png`，或在 `src/config.ts` 中修改
