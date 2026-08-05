@@ -12,11 +12,6 @@ let delay = 0;
 const interval = 50;
 ---
 <MainGridLayout title="项目" description="我的项目归档">
-	<div class="mb-6 flex flex-col gap-2">
-		<h1 class="text-3xl font-bold text-90">项目</h1>
-		<p class="text-75">做过的项目、正在进行的项目，还有已经放弃但值得记录的项目。</p>
-	</div>
-
 	{projects.length === 0 ? (
 		<div class="card-base rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
 			还没有项目文章，去「分类 → 项目」下面新建一篇吧。
