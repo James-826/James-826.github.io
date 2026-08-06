@@ -1,0 +1,7 @@
+name = "james-blog-cms-oauth"
+main = "src/index.js"
+compatibility_date = "2026-08-06"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://james-826.github.io"
