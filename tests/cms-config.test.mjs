@@ -43,7 +43,7 @@ test("CMS shell and config match the Astro content model", async () => {
 		"lang",
 		"body",
 	]);
-	assert.equal(fields.draft.default, true);
+	assert.equal(fields.draft.default, false);
 	assert.equal(fields.published.format, "YYYY-MM-DD");
 });
 

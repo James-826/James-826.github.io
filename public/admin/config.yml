@@ -37,7 +37,7 @@ collections:
       - { label: 分类, name: category, widget: select, required: false, options: [项目, 学习笔记, 博客] }
       - { label: 项目状态, name: status, widget: select, required: false, options: [已完成, 进行中, 已放弃, 计划中] }
       - { label: 项目仓库, name: repo, widget: string, required: false, default: "" }
-      - { label: 保存为草稿, name: draft, widget: boolean, default: true }
+      - { label: 保存为草稿, name: draft, widget: boolean, default: false }
       - label: 语言
         name: lang
         widget: select
