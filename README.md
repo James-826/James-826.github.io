@@ -49,6 +49,14 @@ pnpm push
 `src/content/posts/` 目录，点 `Add file` 新建文章，写完直接提交，
 同样会自动部署。
 
+## 网页 CMS
+
+完成一次免费 OAuth 配置后，可以打开
+[`https://james-826.github.io/admin/`](https://james-826.github.io/admin/)
+直接创建文章、上传封面并发布，不需要本地运行 Git 命令。
+
+首次配置和日常使用步骤见 [网页 CMS 配置与使用指南](docs/cms-setup.zh-CN.md)。
+
 ## 换背景图和头像
 
 背景图：替换 `src/assets/images/banner.png`，或在 `src/config.ts` 中修改

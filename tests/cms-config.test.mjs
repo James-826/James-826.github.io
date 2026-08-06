@@ -45,3 +45,26 @@ test("CMS shell and config match the Astro content model", async () => {
 	assert.equal(fields.draft.default, true);
 	assert.equal(fields.published.format, "YYYY-MM-DD");
 });
+
+test("CMS documentation covers setup, publishing, and troubleshooting", async () => {
+	const [readme, guide] = await Promise.all([
+		read("README.md"),
+		read("docs/cms-setup.zh-CN.md"),
+	]);
+
+	assert.match(readme, /docs\/cms-setup\.zh-CN\.md/);
+	for (const heading of [
+		"费用",
+		"创建 GitHub OAuth App",
+		"部署 Cloudflare Worker",
+		"配置 CMS",
+		"发布第一篇文章",
+		"故障排查",
+		"安全检查",
+	]) {
+		assert.match(guide, new RegExp(`## ${heading}`));
+	}
+	assert.match(guide, /wrangler@4 secret put GITHUB_CLIENT_SECRET/);
+	assert.match(guide, /REPLACE-WITH-YOUR-WORKER/);
+	assert.doesNotMatch(guide, /gh[opsu]_[A-Za-z0-9]{20,}/);
+});
