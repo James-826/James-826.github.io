@@ -25,7 +25,7 @@ Cloudflare 可能要求验证邮箱，但以下步骤不要求升级付费套餐
 确认以下条件：
 
 1. 你能登录拥有 `James-826/James-826.github.io` 写权限的 GitHub 账号。
-2. 仓库默认发布分支是 `main`。
+2. 仓库默认发布分支是 `master`。
 3. GitHub 仓库的 `Settings -> Pages -> Source` 已设置为 `GitHub Actions`。
 4. 本地终端位于仓库根目录。
 
@@ -138,7 +138,7 @@ pnpm test:cms
 pnpm build
 git add public/admin/config.yml
 git commit -m "config: connect CMS OAuth Worker"
-git push origin main
+git push origin master
 ```
 
 打开仓库的 **Actions** 页面，等待 **Deploy to GitHub Pages** 工作流变成绿色。
@@ -175,7 +175,7 @@ OAuth 的 `public_repo` 权限允许 CMS 修改你有写权限的公开仓库。
 
 ### 3. 正式发布
 
-预览内容并确认无误后，关闭 **保存为草稿**，再次保存。CMS 会直接向 `main`
+预览内容并确认无误后，关闭 **保存为草稿**，再次保存。CMS 会直接向 `master`
 提交 Markdown 和图片，随后自动触发 GitHub Actions。
 
 打开仓库 **Actions -> Deploy to GitHub Pages** 查看构建进度。部署成功后，文章会出现在博客首页、归档页和对应分类中。
@@ -184,7 +184,7 @@ OAuth 的 `public_repo` 权限允许 CMS 修改你有写权限的公开仓库。
 
 - 编辑：在 **文章** 列表打开文章，修改后保存，每次保存都会形成 Git commit。
 - 下线但保留：重新开启 **保存为草稿**，生产站点会隐藏文章。
-- 删除：打开文章后选择删除。删除会直接提交到 `main`，操作前确认封面没有被其他文章引用。
+- 删除：打开文章后选择删除。删除会直接提交到 `master`，操作前确认封面没有被其他文章引用。
 
 CMS 第一版管理 `src/content/posts` 下的顶层 Markdown 文件。现有的
 `src/content/posts/post-1/index.md` 是带本地封面的嵌套 page bundle，继续保留，暂时不要用 CMS 编辑或删除它。

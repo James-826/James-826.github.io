@@ -15,13 +15,14 @@ test("CMS shell and config match the Astro content model", async () => {
 	const fields = Object.fromEntries(posts.fields.map((field) => [field.name, field]));
 
 	assert.match(html, /decap-cms@3\.15\.1\/dist\/decap-cms\.js/);
-	assert.deepEqual(config.backend, {
+	assert.deepEqual({ ...config.backend, base_url: "configured" }, {
 		name: "github",
 		repo: "James-826/James-826.github.io",
-		branch: "main",
-		base_url: "https://REPLACE-WITH-YOUR-WORKER.workers.dev",
+		branch: "master",
+		base_url: "configured",
 		auth_endpoint: "auth",
 	});
+	assert.match(config.backend.base_url, /^https:\/\/james-blog-cms-oauth\.[a-z0-9]+\.workers\.dev$/);
 	assert.equal(config.locale, "zh_Hans");
 	assert.equal(config.media_folder, "public/uploads");
 	assert.equal(config.public_folder, "/uploads");
@@ -67,4 +68,22 @@ test("CMS documentation covers setup, publishing, and troubleshooting", async ()
 	assert.match(guide, /wrangler@4 secret put GITHUB_CLIENT_SECRET/);
 	assert.match(guide, /REPLACE-WITH-YOUR-WORKER/);
 	assert.doesNotMatch(guide, /gh[opsu]_[A-Za-z0-9]{20,}/);
+});
+
+test("Pages deployment retries a transient backend timeout", async () => {
+	const workflow = parse(await read(".github/workflows/deploy.yml"));
+	const steps = workflow.jobs.deploy.steps;
+	const deployments = steps.filter(
+		(step) => step.uses === "actions/deploy-pages@v4",
+	);
+
+	assert.equal(deployments.length, 2);
+	assert.equal(deployments[0]["continue-on-error"], true);
+	assert.equal(deployments[0].with.timeout, "1200000");
+	assert.equal(deployments[0].with.error_count, "30");
+	assert.equal(deployments[1].if, "steps.deployment.outcome == 'failure'");
+	assert.match(
+		workflow.jobs.deploy.environment.url,
+		/steps\.deployment_retry\.outputs\.page_url/,
+	);
 });

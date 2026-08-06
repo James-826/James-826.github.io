@@ -1,7 +1,7 @@
 backend:
   name: github
   repo: James-826/James-826.github.io
-  branch: main
+  branch: master
   base_url: https://james-blog-cms-oauth.doelt2225332.workers.dev
   auth_endpoint: auth
 
