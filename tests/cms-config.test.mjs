@@ -70,20 +70,31 @@ test("CMS documentation covers setup, publishing, and troubleshooting", async ()
 	assert.doesNotMatch(guide, /gh[opsu]_[A-Za-z0-9]{20,}/);
 });
 
-test("Pages deployment retries a transient backend timeout", async () => {
+test("Pages deployment runs for site changes without automatic retries", async () => {
 	const workflow = parse(await read(".github/workflows/deploy.yml"));
+	const trigger = workflow.on;
+	assert.deepEqual(trigger.push.branches, ["main", "master"]);
+	assert.deepEqual(trigger.push.paths, [
+		"src/**",
+		"public/**",
+		"astro.config.*",
+		"package.json",
+		"pnpm-lock.yaml",
+		"pnpm-workspace.yaml",
+		"tailwind.config.*",
+		"tsconfig.json",
+		".github/workflows/deploy.yml",
+	]);
+	assert.equal(trigger.workflow_dispatch, null);
 	const steps = workflow.jobs.deploy.steps;
 	const deployments = steps.filter(
 		(step) => step.uses === "actions/deploy-pages@v4",
 	);
 
-	assert.equal(deployments.length, 2);
-	assert.equal(deployments[0]["continue-on-error"], true);
+	assert.equal(deployments.length, 1);
+	assert.equal(deployments[0]["continue-on-error"], undefined);
 	assert.equal(deployments[0].with.timeout, "600000");
 	assert.equal(deployments[0].with.error_count, "30");
-	assert.equal(deployments[1].if, "steps.deployment.outcome == 'failure'");
-	assert.match(
-		workflow.jobs.deploy.environment.url,
-		/steps\.deployment_retry\.outputs\.page_url/,
-	);
+	assert.equal(deployments[0].if, undefined);
+	assert.equal(workflow.jobs.deploy.environment.url, "${{ steps.deployment.outputs.page_url }}");
 });
