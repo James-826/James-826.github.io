@@ -1,0 +1,49 @@
+backend:
+  name: github
+  repo: James-826/James-826.github.io
+  branch: main
+  base_url: https://REPLACE-WITH-YOUR-WORKER.workers.dev
+  auth_endpoint: auth
+
+site_url: https://james-826.github.io
+display_url: https://james-826.github.io
+logo_url: https://james-826.github.io/favicon/favicon-light-128.png
+locale: zh_Hans
+publish_mode: simple
+media_folder: public/uploads
+public_folder: /uploads
+
+collections:
+  - name: posts
+    label: 文章
+    label_singular: 文章
+    folder: src/content/posts
+    create: true
+    extension: md
+    format: yaml-frontmatter
+    slug: "{{slug}}"
+    summary: "{{title}} · {{published}}"
+    sortable_fields: [published, updated, title]
+    view_filters:
+      - { label: 草稿, field: draft, pattern: true }
+      - { label: 项目, field: category, pattern: 项目 }
+    fields:
+      - { label: 标题, name: title, widget: string }
+      - { label: 发布时间, name: published, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false }
+      - { label: 更新时间, name: updated, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false, required: false }
+      - { label: 摘要, name: description, widget: text, required: false, default: "" }
+      - { label: 封面, name: image, widget: image, required: false, default: "" }
+      - { label: 标签, name: tags, widget: list, required: false, default: [] }
+      - { label: 分类, name: category, widget: select, required: false, options: [项目, 学习笔记, 博客] }
+      - { label: 项目状态, name: status, widget: select, required: false, options: [已完成, 进行中, 已放弃, 计划中] }
+      - { label: 项目仓库, name: repo, widget: string, required: false, default: "" }
+      - { label: 保存为草稿, name: draft, widget: boolean, default: true }
+      - label: 语言
+        name: lang
+        widget: select
+        required: false
+        default: zh_CN
+        options:
+          - { label: 简体中文, value: zh_CN }
+          - { label: English, value: en }
+      - { label: 正文, name: body, widget: markdown }
