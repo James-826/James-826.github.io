@@ -86,6 +86,8 @@ test("Pages deployment runs for site changes without automatic retries", async (
 		".github/workflows/deploy.yml",
 	]);
 	assert.equal(trigger.workflow_dispatch, null);
+	assert.equal(workflow.concurrency.group, "pages");
+	assert.equal(workflow.concurrency["cancel-in-progress"], true);
 	const steps = workflow.jobs.deploy.steps;
 	const deployments = steps.filter(
 		(step) => step.uses === "actions/deploy-pages@v4",
