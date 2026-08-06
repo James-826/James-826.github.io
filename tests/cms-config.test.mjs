@@ -79,7 +79,7 @@ test("Pages deployment retries a transient backend timeout", async () => {
 
 	assert.equal(deployments.length, 2);
 	assert.equal(deployments[0]["continue-on-error"], true);
-	assert.equal(deployments[0].with.timeout, "1200000");
+	assert.equal(deployments[0].with.timeout, "600000");
 	assert.equal(deployments[0].with.error_count, "30");
 	assert.equal(deployments[1].if, "steps.deployment.outcome == 'failure'");
 	assert.match(

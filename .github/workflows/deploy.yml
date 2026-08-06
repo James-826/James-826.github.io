@@ -57,7 +57,7 @@ jobs:
         uses: actions/deploy-pages@v4
         continue-on-error: true
         with:
-          timeout: "1200000"
+          timeout: "600000"
           error_count: "30"
 
       - name: Retry GitHub Pages deployment
@@ -65,7 +65,7 @@ jobs:
         if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
         with:
-          timeout: "1200000"
+          timeout: "600000"
           error_count: "30"
 
       - name: Fail if GitHub Pages deployment failed twice
