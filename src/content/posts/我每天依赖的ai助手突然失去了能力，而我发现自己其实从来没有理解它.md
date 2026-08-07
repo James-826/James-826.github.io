@@ -1,7 +1,7 @@
 ---
 title: 我每天依赖的AI助手突然失去了能力，而我发现自己其实从来没有理解它
 published: 2026-08-07
-updated: ""
+updated: 2026-08-07
 description: ""
 image: /uploads/watermelon.jpg
 tags:
