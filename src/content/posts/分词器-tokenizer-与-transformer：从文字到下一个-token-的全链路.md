@@ -5,7 +5,8 @@ updated: 2026-08-08
 description: ""
 image: ""
 tags:
-  - Tokenizer，Transformer
+  - Tokenizer
+  - Transformer
 category: 学习笔记
 repo: ""
 draft: false
