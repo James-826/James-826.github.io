@@ -1,5 +1,5 @@
 ---
-title: 我每天依赖的AI助手突然失去了能力，而我发现自己其实从来没有理解它
+title: 我的AI助手突然失去了能力，而我却无能为力
 published: 2026-08-07
 updated: 2026-08-07
 description: ""
