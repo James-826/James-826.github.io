@@ -61,6 +61,7 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 				<button type="button" class="review-tab" data-filter={tab}>{tab}</button>
 			))}
 			<button id="review-reset" type="button" class="review-reset">重置进度</button>
+			<button id="review-collapse-all" type="button" class="review-tab" title="展开或收起全部博客分组">收起全部</button>
 		</div>
 
 		{categoryCounts.size > 0 && (
@@ -82,14 +83,17 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 	) : (
 		<div class="mt-6 flex flex-col gap-6">
 			{groups.map((group, groupIndexNumber) => (
-				<section class="review-group onload-animation" style={`animation-delay: calc(var(--content-delay) + ${groupIndexNumber * 60}ms);`}>
+				<section id={`review-group-${groupIndexNumber}`} class="review-group onload-animation" data-group-key={group.slug} style={`animation-delay: calc(var(--content-delay) + ${groupIndexNumber * 60}ms);`}>
 					<div class="review-group-header card-base rounded-[var(--radius-large)] px-5 py-3">
+						<button type="button" class="review-group-toggle" data-role="group-toggle" aria-expanded="true" aria-label={`收起 ${group.title}`}>
+							<Icon name="fa6-solid:chevron-down" class="review-group-chevron" />
+						</button>
 						<Icon name="fa6-solid:book-open" class="shrink-0 text-[1.1rem] text-[var(--primary)]" />
 						<a class="link-underline font-semibold" href={group.url}>{group.title}</a>
 						<span class="text-75 opacity-60">{group.items.length} 张卡片</span>
 						<span class="review-group-due" data-role="group-due"></span>
 					</div>
-					<div class="mt-3 flex flex-col gap-3">
+					<div class="mt-3 flex flex-col gap-3" data-role="group-body">
 						{group.items.map((card, cardIndex) => (
 							<ReviewCard card={card} delay={groupIndexNumber * 60 + cardIndex * 50} />
 						))}
@@ -97,14 +101,17 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 				</section>
 			))}
 			{loose.length > 0 && (
-				<section class="review-group onload-animation">
+				<section id="review-group-loose" class="review-group onload-animation" data-group-key="__loose__">
 					<div class="review-group-header card-base rounded-[var(--radius-large)] px-5 py-3">
+						<button type="button" class="review-group-toggle" data-role="group-toggle" aria-expanded="true" aria-label="收起 零散卡片">
+							<Icon name="fa6-solid:chevron-down" class="review-group-chevron" />
+						</button>
 						<Icon name="material-symbols:lightbulb-outline-rounded" class="shrink-0 text-[1.1rem] text-[var(--primary)]" />
 						<span class="font-semibold">零散卡片</span>
 						<span class="text-75 opacity-60">{loose.length} 张卡片</span>
 						<span class="review-group-due" data-role="group-due"></span>
 					</div>
-					<div class="mt-3 flex flex-col gap-3">
+					<div class="mt-3 flex flex-col gap-3" data-role="group-body">
 						{loose.map((card, cardIndex) => (
 							<ReviewCard card={card} delay={cardIndex * 50} />
 						))}
@@ -137,6 +144,8 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 		const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
 		const fmt = (ts) => new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 		const state = { status: "到期", category: "全部" };
+		const KEY_COLLAPSED = "review.collapsed.v1";
+		const collapsed = read(KEY_COLLAPSED, {});
 
 		// 进度存储：{ slug: { reps, interval, due, status } }
 		const sched = read(KEY_SCHED, {});
@@ -216,11 +225,20 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 				const groupCards = [...group.querySelectorAll(".review-card")];
 				const visible = groupCards.some((card) => !card.classList.contains("hidden"));
 				group.classList.toggle("hidden", !visible);
+				const dueCount = groupCards.filter(isDue).length;
 				const dueBadge = group.querySelector('[data-role="group-due"]');
 				if (dueBadge) {
-					const dueCount = groupCards.filter(isDue).length;
 					dueBadge.textContent = dueCount > 0 ? `${dueCount} 到期` : "";
 					dueBadge.classList.toggle("has-due", dueCount > 0);
+				}
+				const tocItem = tocItems.get(group.dataset.groupKey);
+				if (tocItem) {
+					tocItem.classList.toggle("is-dimmed", !visible);
+					const tocDue = tocItem.querySelector('[data-role="toc-due"]');
+					if (tocDue) {
+						tocDue.textContent = dueCount > 0 ? String(dueCount) : "";
+						tocDue.classList.toggle("has-due", dueCount > 0);
+					}
 				}
 			});
 
@@ -233,6 +251,107 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 			document.querySelectorAll(".review-cat").forEach((cat) => {
 				cat.classList.toggle("is-active", cat.dataset.cat === state.category);
 			});
+		};
+
+		let tocItems = new Map();
+		let tocObserver = null;
+
+		const applyCollapse = () => {
+			document.querySelectorAll(".review-group").forEach((group) => {
+				const key = group.dataset.groupKey;
+				const isCollapsed = !!collapsed[key];
+				const body = group.querySelector('[data-role="group-body"]');
+				const toggle = group.querySelector('[data-role="group-toggle"]');
+				const title = group.querySelector(".review-group-header .link-underline, .review-group-header > .font-semibold")?.textContent?.trim() || "博客分组";
+				group.classList.toggle("is-collapsed", isCollapsed);
+				if (toggle) {
+					toggle.setAttribute("aria-expanded", String(!isCollapsed));
+					toggle.setAttribute("aria-label", `${isCollapsed ? "展开" : "收起"} ${title}`);
+				}
+				if (body) body.style.display = isCollapsed ? "none" : "";
+			});
+			syncCollapseAllBtn();
+		};
+
+		const syncCollapseAllBtn = () => {
+			const button = document.getElementById("review-collapse-all");
+			if (!button) return;
+			const keys = [...document.querySelectorAll(".review-group")].map((g) => g.dataset.groupKey).filter(Boolean);
+			button.textContent = keys.length > 0 && keys.every((key) => collapsed[key]) ? "展开全部" : "收起全部";
+		};
+
+		const navigateToGroup = (tocItem) => {
+			const key = tocItem.dataset.tocKey;
+			if (key && collapsed[key]) {
+				collapsed[key] = false;
+				write(KEY_COLLAPSED, collapsed);
+				applyCollapse();
+			}
+			const target = tocItem.dataset.tocTarget ? document.getElementById(tocItem.dataset.tocTarget) : null;
+			if (!target) return;
+			const top = target.getBoundingClientRect().top + window.scrollY - 96;
+			window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+		};
+
+		const buildReviewToc = () => {
+			const toc = document.getElementById("toc");
+			if (!toc) return;
+			const existing = toc.querySelector("#review-toc");
+			if (existing) existing.remove();
+			if (tocObserver) tocObserver.disconnect();
+			tocObserver = null;
+			tocItems = new Map();
+			const groups = [...document.querySelectorAll(".review-group")];
+			if (!groups.length) return;
+			const nav = document.createElement("nav");
+			nav.id = "review-toc";
+			nav.setAttribute("aria-label", "博客目录");
+			nav.className = "review-toc";
+			const list = document.createElement("div");
+			list.className = "flex flex-col gap-0.5";
+			groups.forEach((group, index) => {
+				const link = document.createElement("a");
+				link.className = "review-toc-item";
+				link.href = `#${group.id}`;
+				link.dataset.noSwup = "";
+				link.dataset.tocKey = group.dataset.groupKey;
+				link.dataset.tocTarget = group.id;
+				link.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					navigateToGroup(link);
+				});
+				const num = document.createElement("span");
+				num.className = "review-toc-num";
+				num.textContent = String(index + 1);
+				const label = document.createElement("span");
+				label.className = "review-toc-label text-75";
+				label.textContent = group.querySelector(".review-group-header .link-underline, .review-group-header > .font-semibold")?.textContent?.trim() || group.id;
+				link.title = label.textContent;
+				const due = document.createElement("span");
+				due.className = "review-toc-due";
+				due.dataset.role = "toc-due";
+				link.append(num, label, due);
+				tocItems.set(group.dataset.groupKey, link);
+				list.appendChild(link);
+			});
+			nav.appendChild(list);
+			toc.insertBefore(nav, toc.lastElementChild);
+			tocObserver = new IntersectionObserver((entries) => {
+				entries.forEach((entry) => {
+					if (!entry.isIntersecting) return;
+					document.querySelectorAll(".review-toc-item").forEach((item) => {
+						item.classList.remove("is-active");
+						item.removeAttribute("aria-current");
+					});
+					const active = tocItems.get(entry.target.dataset.groupKey);
+					if (active) {
+						active.classList.add("is-active");
+						active.setAttribute("aria-current", "location");
+					}
+				});
+			}, { rootMargin: "-10% 0px -70% 0px" });
+			groups.forEach((group) => tocObserver.observe(group));
 		};
 
 		const applyGrade = (gradeButton, grade) => {
@@ -266,6 +385,32 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 		let resetTimer = null;
 
 		document.addEventListener("click", (event) => {
+			const toggle = event.target.closest('[data-role="group-toggle"]');
+			if (toggle) {
+				const group = toggle.closest(".review-group");
+				const key = group?.dataset.groupKey;
+				if (key) {
+					collapsed[key] = !collapsed[key];
+					write(KEY_COLLAPSED, collapsed);
+					applyCollapse();
+				}
+				return;
+			}
+			const tocItem = event.target.closest(".review-toc-item");
+			if (tocItem) {
+				event.preventDefault();
+				navigateToGroup(tocItem);
+				return;
+			}
+			const collapseAll = event.target.closest("#review-collapse-all");
+			if (collapseAll) {
+				const keys = [...document.querySelectorAll(".review-group")].map((g) => g.dataset.groupKey).filter(Boolean);
+				const allCollapsed = keys.length > 0 && keys.every((key) => collapsed[key]);
+				keys.forEach((key) => { collapsed[key] = !allCollapsed; });
+				write(KEY_COLLAPSED, collapsed);
+				applyCollapse();
+				return;
+			}
 			const reveal = event.target.closest(".review-reveal");
 			if (reveal) {
 				const answer = reveal.closest(".review-card").querySelector(".review-answer");
@@ -316,7 +461,11 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 			}
 		});
 
-		const init = () => updateAll();
+		const init = () => {
+			buildReviewToc();
+			applyCollapse();
+			updateAll();
+		};
 		document.addEventListener("DOMContentLoaded", init);
 		if (document.readyState !== "loading") init();
 		document.addEventListener("swup:contentReplaced", init);
@@ -366,6 +515,94 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 		transition: opacity 0.2s, background-color 0.2s, color 0.2s;
 	}
 	.review-group-due.has-due {
+		opacity: 1;
+		background: color-mix(in srgb, var(--primary) 14%, transparent);
+		color: var(--primary);
+	}
+
+	.review-group {
+		scroll-margin-top: 7rem;
+	}
+	.review-group-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.9rem;
+		height: 1.9rem;
+		border-radius: 9999px;
+		flex-shrink: 0;
+		color: var(--btn-content);
+		transition: background-color 0.2s;
+	}
+	.review-group-toggle:hover {
+		background: var(--btn-regular-bg-hover);
+	}
+	.review-group-toggle:active {
+		background: var(--btn-regular-bg-active);
+	}
+	.review-group-chevron {
+		font-size: 0.85rem;
+		transition: transform 0.25s ease;
+	}
+	.review-group.is-collapsed .review-group-chevron {
+		transform: rotate(-90deg);
+	}
+
+	.review-toc {
+		display: flex;
+		flex-direction: column;
+	}
+	.review-toc-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.45rem 0.6rem;
+		border-radius: 0.75rem;
+		transition: background-color 0.2s, opacity 0.2s;
+	}
+	.review-toc-item:hover {
+		background: var(--toc-btn-hover);
+	}
+	.review-toc-item.is-active {
+		background: var(--toc-btn-hover);
+		color: var(--toc-item-active);
+	}
+	.review-toc-item.is-active .review-toc-label {
+		color: var(--toc-item-active);
+	}
+	.review-toc-item.is-dimmed {
+		opacity: 0.35;
+	}
+	.review-toc-num {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 1.1rem;
+		height: 1.1rem;
+		border-radius: 0.3rem;
+		background: var(--toc-badge-bg);
+		color: var(--btn-content);
+		font-size: 0.65rem;
+		font-weight: 700;
+	}
+	.review-toc-label {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.8rem;
+	}
+	.review-toc-due {
+		flex-shrink: 0;
+		border-radius: 9999px;
+		padding: 0.05rem 0.5rem;
+		font-size: 0.7rem;
+		opacity: 0;
+		transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+	}
+	.review-toc-due.has-due {
 		opacity: 1;
 		background: color-mix(in srgb, var(--primary) 14%, transparent);
 		color: var(--primary);
