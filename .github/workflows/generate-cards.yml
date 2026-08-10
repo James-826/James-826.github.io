@@ -25,7 +25,6 @@ env:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    if: env.SENSENOVA_API_KEY != ''
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,12 +33,14 @@ jobs:
         with:
           node-version: 20
       - name: Generate cards from posts
+        if: env.SENSENOVA_API_KEY != ''
         run: |
           ARGS=""
           if [ -n "${{ inputs.slug }}" ]; then ARGS="${{ inputs.slug }}"; fi
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
           node scripts/generate-cards.mjs $ARGS
       - name: Commit generated cards
+        if: env.SENSENOVA_API_KEY != ''
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
