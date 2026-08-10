@@ -1,6 +1,9 @@
-﻿---
-import { getCollection, render } from "astro:content";
+---
+import { getCollection } from "astro:content";
+import { Icon } from "astro-icon/components";
+import ReviewCard from "@components/ReviewCard.astro";
 import MainGridLayout from "@layouts/MainGridLayout.astro";
+import { getPostUrlBySlug } from "@utils/url-utils";
 
 const cards = (await getCollection("cards")).sort((a, b) => {
 	const order = ["待复习", "学习中", "已掌握"];
@@ -12,74 +15,105 @@ const cards = (await getCollection("cards")).sort((a, b) => {
 	return db - da;
 });
 
-const rendered = await Promise.all(
-	cards.map(async (card) => ({ card, content: (await render(card)).Content })),
-);
-const total = rendered.length;
+const posts = await getCollection("posts");
+const postTitles = new Map(posts.map((p) => [p.slug, p.data.title]));
+
+const categoryCounts = new Map<string, number>();
+for (const card of cards) {
+	const category = (card.data.category ?? "").trim();
+	if (category) categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+}
+
+const groups: { slug: string; title: string; url: string; items: typeof cards }[] = [];
+const loose: typeof cards = [];
+const groupIndex = new Map<string, number>();
+for (const card of cards) {
+	const slug = (card.data.post ?? "").trim();
+	if (!slug) {
+		loose.push(card);
+		continue;
+	}
+	let index = groupIndex.get(slug);
+	if (index === undefined) {
+		index = groups.length;
+		groupIndex.set(slug, index);
+		groups.push({ slug, title: postTitles.get(slug) ?? slug, url: getPostUrlBySlug(slug), items: [] });
+	}
+	groups[index].items.push(card);
+}
+
+const total = cards.length;
+const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 ---
 
 <MainGridLayout title="复习卡片" description="间隔重复复习：先回忆，再点开答案对照">
-	<div class="card-base rounded-[var(--radius-large)] px-6 py-5">
+	<div class="card-base rounded-[var(--radius-large)] px-6 py-5 onload-animation">
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<h1 class="text-lg font-bold">复习卡片</h1>
 				<p class="text-75 opacity-70">先在心里回忆答案，再点"显示答案"对照；答不上来的卡片会更快再次出现。</p>
 			</div>
-			<div class="text-75 opacity-80" id="review-stats"></div>
+			<div class="flex flex-wrap gap-2 text-75" id="review-stats"></div>
 		</div>
-		<div class="mt-4 flex flex-wrap gap-2" id="review-tabs">
-			{["到期", "全部", "待复习", "学习中", "已掌握"].map((t) => (
-				<button
-					data-filter={t}
-					class="review-tab rounded-full px-3 py-1 text-75 transition-colors"
-				>{t}</button>
+
+		<div class="mt-4 flex flex-wrap items-center gap-2" id="review-tabs">
+			{statusTabs.map((tab) => (
+				<button type="button" class="review-tab" data-filter={tab}>{tab}</button>
 			))}
-			<button id="review-reset" class="ml-auto rounded-full px-3 py-1 text-75 opacity-60 hover:opacity-100 transition-opacity">
-				重置进度
-			</button>
+			<button id="review-reset" type="button" class="review-reset">重置进度</button>
 		</div>
+
+		{categoryCounts.size > 0 && (
+			<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--line-color)] pt-3" id="review-cats">
+				<button type="button" class="review-cat" data-cat="全部">全部分类</button>
+				{[...categoryCounts.entries()].map(([category, count]) => (
+					<button type="button" class="review-cat" data-cat={category}>
+						{category} <span class="opacity-60">{count}</span>
+					</button>
+				))}
+			</div>
+		)}
 	</div>
 
 	{total === 0 ? (
-		<div class="card-base rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
+		<div class="card-base mt-6 rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
 			还没有复习卡片。去 <a class="link-underline" href="/admin/">CMS 后台</a> 的"复习卡片"里新建一张吧：写下问题与答案，保存后这里会自动出现。
 		</div>
 	) : (
-		<div class="mt-6 flex flex-col gap-4">
-			{rendered.map(({ card, content: Content }, index) => (
-				<div
-					class="review-card card-base rounded-[var(--radius-large)] px-6 py-5 onload-animation"
-					data-slug={card.slug}
-					data-status={card.data.status ?? "待复习"}
-					style={`animation-delay: calc(var(--content-delay) + ${index * 50}ms);`}
-				>
-					<div class="flex items-start justify-between gap-3">
-						<h2 class="text-lg font-semibold leading-snug">{card.data.question}</h2>
-						<span class="shrink-0 rounded-full px-2 py-0.5 text-75 opacity-80">{card.data.status ?? "待复习"}</span>
+		<div class="mt-6 flex flex-col gap-6">
+			{groups.map((group, groupIndexNumber) => (
+				<section class="review-group onload-animation" style={`animation-delay: calc(var(--content-delay) + ${groupIndexNumber * 60}ms);`}>
+					<div class="review-group-header card-base rounded-[var(--radius-large)] px-5 py-3">
+						<Icon name="fa6-solid:book-open" class="shrink-0 text-[1.1rem] text-[var(--primary)]" />
+						<a class="link-underline font-semibold" href={group.url}>{group.title}</a>
+						<span class="text-75 opacity-60">{group.items.length} 张卡片</span>
+						<span class="review-group-due" data-role="group-due"></span>
 					</div>
-					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-75 opacity-70">
-						{card.data.tags?.map((tag) => <span>#{tag}</span>)}
-						{card.data.post && (
-							<a class="link-underline" href={`/posts/${card.data.post}/`}>查看关联文章 →</a>
-						)}
+					<div class="mt-3 flex flex-col gap-3">
+						{group.items.map((card, cardIndex) => (
+							<ReviewCard card={card} delay={groupIndexNumber * 60 + cardIndex * 50} />
+						))}
 					</div>
-					<button
-						class="review-reveal mt-4 rounded-full px-4 py-1.5 text-75 font-medium"
-						type="button"
-					>显示答案</button>
-					<div class="review-answer mt-4 hidden">
-						<div class="rounded-[var(--radius-small)] bg-[var(--card-bg)] p-4 prose">
-							<Content />
-						</div>
-						<div class="mt-3 flex flex-wrap gap-2">
-							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="again" type="button">没记住 · 明天再看</button>
-							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="good" type="button">记住了 · 7 天后</button>
-							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="master" type="button">已掌握</button>
-						</div>
-						<p class="review-next mt-3 text-75 opacity-60"></p>
-					</div>
-				</div>
+				</section>
 			))}
+			{loose.length > 0 && (
+				<section class="review-group onload-animation">
+					<div class="review-group-header card-base rounded-[var(--radius-large)] px-5 py-3">
+						<Icon name="material-symbols:lightbulb-outline-rounded" class="shrink-0 text-[1.1rem] text-[var(--primary)]" />
+						<span class="font-semibold">零散卡片</span>
+						<span class="text-75 opacity-60">{loose.length} 张卡片</span>
+						<span class="review-group-due" data-role="group-due"></span>
+					</div>
+					<div class="mt-3 flex flex-col gap-3">
+						{loose.map((card, cardIndex) => (
+							<ReviewCard card={card} delay={cardIndex * 50} />
+						))}
+					</div>
+				</section>
+			)}
+			<div id="review-empty" class="card-base hidden rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
+				这个筛选条件下暂时没有卡片。
+			</div>
 		</div>
 	)}
 </MainGridLayout>
@@ -91,64 +125,90 @@ const total = rendered.length;
 		const KEY_MASTER = "review.master.v1";
 		const read = (key, fallback) => {
 			try {
-				const v = JSON.parse(localStorage.getItem(key));
-				return v ?? fallback;
+				const value = JSON.parse(localStorage.getItem(key));
+				return value ?? fallback;
 			} catch {
 				return fallback;
 			}
 		};
 		const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
-		const fmt = (ts) =>
-			new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+		const fmt = (ts) => new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+		const state = { status: "到期", category: "全部" };
 
-		const render = () => {
-			const now = Date.now();
-			const due = read(KEY_DUE, {});
-			const mastered = read(KEY_MASTER, []);
-			let dueCount = 0;
+		const isMastered = (card) => card.dataset.status === "已掌握" || read(KEY_MASTER, []).includes(card.dataset.slug);
+		const isDue = (card) => {
+			if (isMastered(card)) return false;
+			const next = read(KEY_DUE, {})[card.dataset.slug];
+			return !next || next <= Date.now();
+		};
 
-			document.querySelectorAll(".review-card").forEach((el) => {
-				const slug = el.dataset.slug;
-				const status = el.dataset.status;
-				const isMastered = status === "已掌握" || mastered.includes(slug);
-				const next = due[slug];
-				const isDue = !isMastered && (!next || next <= now);
-				if (isDue) dueCount++;
+		const updateCard = (card) => {
+			const badge = card.querySelector('[data-role="status-badge"]');
+			const next = card.querySelector('[data-role="next"]');
+			if (isMastered(card)) {
+				badge.textContent = "✓ 已掌握";
+				badge.classList.add("is-mastered");
+				next.textContent = "已掌握";
+			} else {
+				badge.textContent = card.dataset.status;
+				badge.classList.remove("is-mastered");
+				const dueAt = read(KEY_DUE, {})[card.dataset.slug];
+				next.textContent = dueAt ? `下次 ${fmt(dueAt)}` : "今日到期";
+			}
+		};
 
-				const badge = el.querySelector(".review-next");
-				if (badge) {
-					if (isMastered) badge.textContent = "已在掌握列表，不会出现在"到期"里（可点右上角"重置进度"恢复）。";
-					else if (next) badge.textContent = `下次复习：${fmt(next)}`;
-					else badge.textContent = "";
+		const updateAll = () => {
+			const cards = [...document.querySelectorAll(".review-card")];
+			cards.forEach(updateCard);
+
+			const stats = document.getElementById("review-stats");
+			if (stats) {
+				const dueCount = cards.filter(isDue).length;
+				const masterCount = cards.filter(isMastered).length;
+				const percent = cards.length ? Math.round((masterCount / cards.length) * 100) : 0;
+				stats.textContent = `今日到期 ${dueCount} · 全部 ${cards.length} · 已掌握 ${percent}%`;
+			}
+
+			let visibleCount = 0;
+			cards.forEach((card) => {
+				const categoryOk = state.category === "全部" || card.dataset.category === state.category;
+				const mastered = isMastered(card);
+				let statusOk;
+				if (state.status === "到期") statusOk = isDue(card);
+				else if (state.status === "全部") statusOk = true;
+				else if (state.status === "已掌握") statusOk = mastered;
+				else statusOk = card.dataset.status === state.status && !mastered;
+				const show = categoryOk && statusOk;
+				card.classList.toggle("hidden", !show);
+				if (show) visibleCount++;
+			});
+
+			document.querySelectorAll(".review-group").forEach((group) => {
+				const groupCards = [...group.querySelectorAll(".review-card")];
+				const visible = groupCards.some((card) => !card.classList.contains("hidden"));
+				group.classList.toggle("hidden", !visible);
+				const dueBadge = group.querySelector('[data-role="group-due"]');
+				if (dueBadge) {
+					const dueCount = groupCards.filter(isDue).length;
+					dueBadge.textContent = dueCount > 0 ? `${dueCount} 到期` : "";
+					dueBadge.classList.toggle("has-due", dueCount > 0);
 				}
 			});
 
-			const stats = document.getElementById("review-stats");
-			if (stats) stats.textContent = `全部 ${document.querySelectorAll(".review-card").length} 张 · 今日到期 ${dueCount} 张`;
-
-			const active = document.querySelector(".review-tab[data-active]")?.dataset.filter ?? "到期";
-			document.querySelectorAll(".review-card").forEach((el) => {
-				const slug = el.dataset.slug;
-				const status = el.dataset.status;
-				const due = read(KEY_DUE, {});
-				const mastered = read(KEY_MASTER, []);
-				const isMastered = status === "已掌握" || mastered.includes(slug);
-				const isDue = !isMastered && (!due[slug] || due[slug] <= Date.now());
-				const show =
-					active === "全部" ||
-					(active === "到期" && isDue) ||
-					(active === status && status !== "已掌握") ||
-					(active === "已掌握" && isMastered);
-				el.classList.toggle("hidden", !show);
-			});
+			const empty = document.getElementById("review-empty");
+			if (empty) empty.classList.toggle("hidden", visibleCount > 0);
 
 			document.querySelectorAll(".review-tab").forEach((tab) => {
-				tab.dataset.active = tab.dataset.filter === active ? "true" : "";
+				tab.classList.toggle("is-active", tab.dataset.filter === state.status);
+			});
+			document.querySelectorAll(".review-cat").forEach((cat) => {
+				cat.classList.toggle("is-active", cat.dataset.cat === state.category);
 			});
 		};
 
-		const applyGrade = (el, grade) => {
-			const slug = el.closest(".review-card").dataset.slug;
+		const applyGrade = (gradeButton, grade) => {
+			const card = gradeButton.closest(".review-card");
+			const slug = card.dataset.slug;
 			const due = read(KEY_DUE, {});
 			const mastered = read(KEY_MASTER, []);
 			if (grade === "again") due[slug] = Date.now() + DAY;
@@ -156,62 +216,211 @@ const total = rendered.length;
 			else if (grade === "master" && !mastered.includes(slug)) mastered.push(slug);
 			write(KEY_DUE, due);
 			write(KEY_MASTER, mastered);
-			render();
+			updateAll();
 		};
 
-		document.addEventListener("click", (e) => {
-			const reveal = e.target.closest(".review-reveal");
+		let resetArmed = false;
+		let resetTimer = null;
+
+		document.addEventListener("click", (event) => {
+			const reveal = event.target.closest(".review-reveal");
 			if (reveal) {
-				const card = reveal.closest(".review-card");
-				const answer = card.querySelector(".review-answer");
-				answer.classList.toggle("hidden");
-				reveal.textContent = answer.classList.contains("hidden") ? "显示答案" : "收起答案";
-				reveal.classList.toggle("hidden", !answer.classList.contains("hidden"));
+				const answer = reveal.closest(".review-card").querySelector(".review-answer");
+				const open = answer.classList.toggle("open");
+				reveal.textContent = open ? "收起答案" : "显示答案";
+				reveal.setAttribute("aria-expanded", String(open));
 				return;
 			}
-			const grade = e.target.closest(".review-grade");
+			const grade = event.target.closest(".review-grade");
 			if (grade) {
 				applyGrade(grade, grade.dataset.grade);
 				return;
 			}
-			const tab = e.target.closest(".review-tab");
+			const tab = event.target.closest(".review-tab");
 			if (tab) {
-				document.querySelectorAll(".review-tab").forEach((t) => delete t.dataset.active);
-				tab.dataset.active = "true";
-				render();
+				state.status = tab.dataset.filter;
+				updateAll();
 				return;
 			}
-			const reset = e.target.closest("#review-reset");
+			const cat = event.target.closest(".review-cat");
+			if (cat) {
+				state.category = cat.dataset.cat;
+				updateAll();
+				return;
+			}
+			const reset = event.target.closest("#review-reset");
 			if (reset) {
-				localStorage.removeItem(KEY_DUE);
-				localStorage.removeItem(KEY_MASTER);
-				render();
+				if (!resetArmed) {
+					resetArmed = true;
+					reset.textContent = "确认重置？";
+					reset.classList.add("is-armed");
+					clearTimeout(resetTimer);
+					resetTimer = setTimeout(() => {
+						resetArmed = false;
+						reset.textContent = "重置进度";
+						reset.classList.remove("is-armed");
+					}, 3000);
+				} else {
+					localStorage.removeItem(KEY_DUE);
+					localStorage.removeItem(KEY_MASTER);
+					resetArmed = false;
+					reset.textContent = "重置进度";
+					reset.classList.remove("is-armed");
+					updateAll();
+				}
 			}
 		});
 
-		document.addEventListener("DOMContentLoaded", render);
-		if (document.readyState !== "loading") render();
-		document.addEventListener("swup:contentReplaced", render);
+		const init = () => updateAll();
+		document.addEventListener("DOMContentLoaded", init);
+		if (document.readyState !== "loading") init();
+		document.addEventListener("swup:contentReplaced", init);
 	})();
 </script>
 
 <style is:global>
-	.review-tab[data-active] {
+	.review-tab,
+	.review-cat,
+	.review-reset {
+		border-radius: 9999px;
+		padding: 0.3rem 0.85rem;
+		font-size: 0.75em;
+		transition: background-color 0.2s, color 0.2s, border-color 0.2s, opacity 0.2s;
+		border: 1px solid transparent;
+		opacity: 0.75;
+	}
+	.review-tab:hover,
+	.review-cat:hover,
+	.review-reset:hover {
+		opacity: 1;
+		border-color: var(--line-color);
+	}
+	.review-tab.is-active,
+	.review-cat.is-active {
 		background: var(--primary);
 		color: var(--primary-contrast);
+		opacity: 1;
 	}
+	.review-reset.is-armed {
+		color: oklch(0.62 0.15 25);
+		border-color: color-mix(in srgb, oklch(0.62 0.15 25) 45%, transparent);
+		opacity: 1;
+	}
+
+	.review-group-header {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.review-group-due {
+		margin-left: auto;
+		border-radius: 9999px;
+		padding: 0.15rem 0.6rem;
+		font-size: 0.75em;
+		opacity: 0;
+		transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+	}
+	.review-group-due.has-due {
+		opacity: 1;
+		background: color-mix(in srgb, var(--primary) 14%, transparent);
+		color: var(--primary);
+	}
+
+	.review-card {
+		border: 1px solid var(--line-color);
+		transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+	}
+	.review-card:hover {
+		border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+		box-shadow: 0 6px 24px rgb(0 0 0 / 0.05);
+		transform: translateY(-1px);
+	}
+
+	.review-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		border-radius: 9999px;
+		padding: 0.15rem 0.6rem;
+		font-size: 0.75em;
+	}
+	.review-badge-category {
+		background: color-mix(in srgb, var(--primary) 12%, transparent);
+		color: var(--primary);
+	}
+	.review-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 9999px;
+		background: var(--primary);
+	}
+	.review-badge-status {
+		background: oklch(0.55 0.02 200 / 0.12);
+		color: oklch(0.55 0.02 200);
+	}
+	.review-badge-status.is-mastered {
+		background: oklch(0.7 0.15 150 / 0.15);
+		color: oklch(0.62 0.15 150);
+	}
+
 	.review-reveal {
 		background: var(--primary);
 		color: var(--primary-contrast);
+		border-radius: 9999px;
+		padding: 0.4rem 1.1rem;
+		font-size: 0.75em;
+		font-weight: 500;
+		transition: opacity 0.2s;
 	}
+	.review-reveal:hover {
+		opacity: 0.88;
+	}
+
+	.review-answer {
+		display: grid;
+		grid-template-rows: 0fr;
+		transition: grid-template-rows 0.3s ease;
+	}
+	.review-answer.open {
+		grid-template-rows: 1fr;
+	}
+	.review-answer-inner {
+		overflow: hidden;
+		min-height: 0;
+	}
+
 	.review-grade {
+		border-radius: 9999px;
+		padding: 0.4rem 0.95rem;
+		font-size: 0.75em;
 		border: 1px solid var(--line-color);
+		transition: background-color 0.2s, border-color 0.2s;
 	}
-	.review-grade:hover {
-		border-color: var(--primary);
+	.review-grade-again {
+		color: oklch(0.62 0.15 25);
+		border-color: color-mix(in srgb, oklch(0.62 0.15 25) 35%, transparent);
+	}
+	.review-grade-again:hover {
+		background: color-mix(in srgb, oklch(0.62 0.15 25) 12%, transparent);
+	}
+	.review-grade-good {
+		color: oklch(0.65 0.14 150);
+		border-color: color-mix(in srgb, oklch(0.65 0.14 150) 35%, transparent);
+	}
+	.review-grade-good:hover {
+		background: color-mix(in srgb, oklch(0.65 0.14 150) 12%, transparent);
+	}
+	.review-grade-master {
 		color: var(--primary);
+		border-color: color-mix(in srgb, var(--primary) 35%, transparent);
 	}
-	.review-card.hidden {
+	.review-grade-master:hover {
+		background: color-mix(in srgb, var(--primary) 12%, transparent);
+	}
+
+	.review-card.hidden,
+	.review-group.hidden,
+	#review-empty.hidden {
 		display: none;
 	}
 </style>

@@ -26,6 +26,7 @@ const cardsCollection = defineCollection({
 		question: z.string(),
 		answer: z.string(),
 		post: z.string().optional().default(""),
+		category: z.string().optional().default(""),
 		tags: z.array(z.string()).optional().default([]),
 		status: z.string().optional().default("待复习"),
 		created: z.date().optional(),

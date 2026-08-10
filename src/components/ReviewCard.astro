@@ -1,0 +1,50 @@
+---
+import MarkdownIt from "markdown-it";
+import type { CollectionEntry } from "astro:content";
+
+interface Props {
+	card: CollectionEntry<"cards">;
+	delay?: number;
+}
+
+const { card, delay = 0 } = Astro.props;
+const { question, answer, category, status } = card.data;
+const answerHtml = new MarkdownIt().render(answer ?? "");
+---
+
+<div
+	class="review-card card-base rounded-[var(--radius-large)] px-5 py-4 onload-animation"
+	data-slug={card.slug}
+	data-status={status}
+	data-category={category}
+	style={`animation-delay: calc(var(--content-delay) + ${delay}ms);`}
+>
+	<div class="flex flex-wrap items-center gap-2">
+		{category && (
+			<span class="review-badge review-badge-category">🎯 {category}</span>
+		)}
+		<span class="review-badge review-badge-status" data-role="status-badge">
+			<span class="review-dot"></span>
+			{status}
+		</span>
+		<span class="text-75 opacity-60" data-role="next"></span>
+	</div>
+
+	<p class="mt-3 font-semibold leading-relaxed">{question}</p>
+
+	<div class="mt-3 flex flex-wrap items-center gap-2">
+		<button type="button" class="review-reveal" aria-expanded="false">显示答案</button>
+		<span class="flex-1"></span>
+		<button type="button" class="review-grade review-grade-again" data-grade="again">没记住</button>
+		<button type="button" class="review-grade review-grade-good" data-grade="good">记住了</button>
+		<button type="button" class="review-grade review-grade-master" data-grade="master">已掌握</button>
+	</div>
+
+	<div class="review-answer mt-3">
+		<div class="review-answer-inner">
+			<div class="border-t border-[var(--line-color)] pt-3">
+				<div class="prose dark:prose-invert prose-sm !max-w-none custom-md" set:html={answerHtml}></div>
+			</div>
+		</div>
+	</div>
+</div>

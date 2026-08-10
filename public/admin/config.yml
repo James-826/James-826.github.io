@@ -64,7 +64,8 @@ collections:
     fields:
       - { label: 问题, name: question, widget: text }
       - { label: 答案, name: answer, widget: markdown }
-      - { label: 关联文章 slug, name: post, widget: string, required: false, default: "" }
+      - { label: 关联文章 slug, name: post, widget: string, required: false, default: "", hint: "填入文章 slug，回顾页会按文章分组展示" }
+      - { label: 分类, name: category, widget: select, required: false, default: "", options: [AI 与机器学习, 编程与工具, 写作与思考, 英语, 其他], hint: "回顾页按类别筛选" }
       - { label: 标签, name: tags, widget: list, required: false, default: [], field: { label: 标签, name: tag, widget: string } }
       - { label: 状态, name: status, widget: select, required: false, default: 待复习, options: [待复习, 学习中, 已掌握] }
       - { label: 创建时间, name: created, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false, required: false }
