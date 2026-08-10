@@ -1,12 +1,12 @@
 ---
-question: "CC Switch 在 AI 工作流中的核心角色是什么？"
-answer: "它不仅是配置管理器，更是 Agent 与模型间的**协议翻译官**。它负责路由选择、协议格式转换（如 Responses API 转 Chat Completions），对 Agent 透明，使其能无感切换不同模型入口。"
+question: "CC Switch 在 AI 助手和模型之间扮演什么角色？"
+answer: "CC Switch 扮演“翻译官”的角色。它站在 Agent 和模型之间，负责根据配置进行路由选择，并将请求从一种协议格式转换成另一种协议格式，再发送给上游模型，最后将响应转换回 Agent 能理解的格式。"
 post: "我每天依赖的ai助手突然失去了能力，而我发现自己其实从来没有理解它"
 category: "编程与工具"
 tags:
   - "CC Switch"
   - "协议转换"
-  - "AI 工具"
+  - "中间件"
 status: 待复习
 created: 2026-08-10
 ---
