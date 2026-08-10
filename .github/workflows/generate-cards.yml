@@ -1,0 +1,52 @@
+name: Generate Review Cards
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "src/content/posts/**"
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "指定文章 slug（留空 = 自动检测本次推送的文章）"
+        required: false
+        default: ""
+      force:
+        description: "重新生成并覆盖该文章已有的卡片"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  SENSENOVA_API_KEY: ${{ secrets.SENSENOVA_API_KEY }}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    if: env.SENSENOVA_API_KEY != ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate cards from posts
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.slug }}" ]; then ARGS="${{ inputs.slug }}"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          node scripts/generate-cards.mjs $ARGS
+      - name: Commit generated cards
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content/cards
+          if git diff --cached --quiet; then
+            echo "没有新卡片生成，无需提交。"
+          else
+            git commit -m "feat: 自动生成复习卡片"
+            git push
+          fi
