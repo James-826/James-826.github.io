@@ -18,9 +18,11 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 env:
   SENSENOVA_API_KEY: ${{ secrets.SENSENOVA_API_KEY }}
+  LEDGER_DISPATCH_TOKEN: ${{ secrets.LEDGER_DISPATCH_TOKEN }}
 
 jobs:
   generate:
@@ -40,6 +42,7 @@ jobs:
           if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
           node scripts/generate-cards.mjs $ARGS
       - name: Commit generated cards
+        id: commit
         if: env.SENSENOVA_API_KEY != ''
         run: |
           git config user.name "github-actions[bot]"
@@ -50,4 +53,19 @@ jobs:
           else
             git commit -m "feat: 自动生成复习卡片"
             git push
+            echo "committed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Trigger Pages deploy
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml -R "$GITHUB_REPOSITORY"
+      - name: Notify ledger
+        if: steps.commit.outputs.committed == 'true' && env.LEDGER_DISPATCH_TOKEN != ''
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${LEDGER_DISPATCH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/James-826/project-ledger/dispatches \
+            -d '{"event_type":"ledger-update"}'
