@@ -1,0 +1,217 @@
+﻿---
+import { getCollection, render } from "astro:content";
+import MainGridLayout from "@layouts/MainGridLayout.astro";
+
+const cards = (await getCollection("cards")).sort((a, b) => {
+	const order = ["待复习", "学习中", "已掌握"];
+	const oa = order.indexOf(a.data.status ?? "待复习");
+	const ob = order.indexOf(b.data.status ?? "待复习");
+	if (oa !== ob) return oa - ob;
+	const da = a.data.created ? new Date(a.data.created).getTime() : 0;
+	const db = b.data.created ? new Date(b.data.created).getTime() : 0;
+	return db - da;
+});
+
+const rendered = await Promise.all(
+	cards.map(async (card) => ({ card, content: (await render(card)).Content })),
+);
+const total = rendered.length;
+---
+
+<MainGridLayout title="复习卡片" description="间隔重复复习：先回忆，再点开答案对照">
+	<div class="card-base rounded-[var(--radius-large)] px-6 py-5">
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<h1 class="text-lg font-bold">复习卡片</h1>
+				<p class="text-75 opacity-70">先在心里回忆答案，再点"显示答案"对照；答不上来的卡片会更快再次出现。</p>
+			</div>
+			<div class="text-75 opacity-80" id="review-stats"></div>
+		</div>
+		<div class="mt-4 flex flex-wrap gap-2" id="review-tabs">
+			{["到期", "全部", "待复习", "学习中", "已掌握"].map((t) => (
+				<button
+					data-filter={t}
+					class="review-tab rounded-full px-3 py-1 text-75 transition-colors"
+				>{t}</button>
+			))}
+			<button id="review-reset" class="ml-auto rounded-full px-3 py-1 text-75 opacity-60 hover:opacity-100 transition-opacity">
+				重置进度
+			</button>
+		</div>
+	</div>
+
+	{total === 0 ? (
+		<div class="card-base rounded-[var(--radius-large)] px-6 py-10 text-center text-75">
+			还没有复习卡片。去 <a class="link-underline" href="/admin/">CMS 后台</a> 的"复习卡片"里新建一张吧：写下问题与答案，保存后这里会自动出现。
+		</div>
+	) : (
+		<div class="mt-6 flex flex-col gap-4">
+			{rendered.map(({ card, content: Content }, index) => (
+				<div
+					class="review-card card-base rounded-[var(--radius-large)] px-6 py-5 onload-animation"
+					data-slug={card.slug}
+					data-status={card.data.status ?? "待复习"}
+					style={`animation-delay: calc(var(--content-delay) + ${index * 50}ms);`}
+				>
+					<div class="flex items-start justify-between gap-3">
+						<h2 class="text-lg font-semibold leading-snug">{card.data.question}</h2>
+						<span class="shrink-0 rounded-full px-2 py-0.5 text-75 opacity-80">{card.data.status ?? "待复习"}</span>
+					</div>
+					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-75 opacity-70">
+						{card.data.tags?.map((tag) => <span>#{tag}</span>)}
+						{card.data.post && (
+							<a class="link-underline" href={`/posts/${card.data.post}/`}>查看关联文章 →</a>
+						)}
+					</div>
+					<button
+						class="review-reveal mt-4 rounded-full px-4 py-1.5 text-75 font-medium"
+						type="button"
+					>显示答案</button>
+					<div class="review-answer mt-4 hidden">
+						<div class="rounded-[var(--radius-small)] bg-[var(--card-bg)] p-4 prose">
+							<Content />
+						</div>
+						<div class="mt-3 flex flex-wrap gap-2">
+							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="again" type="button">没记住 · 明天再看</button>
+							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="good" type="button">记住了 · 7 天后</button>
+							<button class="review-grade rounded-full px-4 py-1.5 text-75" data-grade="master" type="button">已掌握</button>
+						</div>
+						<p class="review-next mt-3 text-75 opacity-60"></p>
+					</div>
+				</div>
+			))}
+		</div>
+	)}
+</MainGridLayout>
+
+<script is:inline>
+	(() => {
+		const DAY = 24 * 60 * 60 * 1000;
+		const KEY_DUE = "review.due.v1";
+		const KEY_MASTER = "review.master.v1";
+		const read = (key, fallback) => {
+			try {
+				const v = JSON.parse(localStorage.getItem(key));
+				return v ?? fallback;
+			} catch {
+				return fallback;
+			}
+		};
+		const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+		const fmt = (ts) =>
+			new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+
+		const render = () => {
+			const now = Date.now();
+			const due = read(KEY_DUE, {});
+			const mastered = read(KEY_MASTER, []);
+			let dueCount = 0;
+
+			document.querySelectorAll(".review-card").forEach((el) => {
+				const slug = el.dataset.slug;
+				const status = el.dataset.status;
+				const isMastered = status === "已掌握" || mastered.includes(slug);
+				const next = due[slug];
+				const isDue = !isMastered && (!next || next <= now);
+				if (isDue) dueCount++;
+
+				const badge = el.querySelector(".review-next");
+				if (badge) {
+					if (isMastered) badge.textContent = "已在掌握列表，不会出现在"到期"里（可点右上角"重置进度"恢复）。";
+					else if (next) badge.textContent = `下次复习：${fmt(next)}`;
+					else badge.textContent = "";
+				}
+			});
+
+			const stats = document.getElementById("review-stats");
+			if (stats) stats.textContent = `全部 ${document.querySelectorAll(".review-card").length} 张 · 今日到期 ${dueCount} 张`;
+
+			const active = document.querySelector(".review-tab[data-active]")?.dataset.filter ?? "到期";
+			document.querySelectorAll(".review-card").forEach((el) => {
+				const slug = el.dataset.slug;
+				const status = el.dataset.status;
+				const due = read(KEY_DUE, {});
+				const mastered = read(KEY_MASTER, []);
+				const isMastered = status === "已掌握" || mastered.includes(slug);
+				const isDue = !isMastered && (!due[slug] || due[slug] <= Date.now());
+				const show =
+					active === "全部" ||
+					(active === "到期" && isDue) ||
+					(active === status && status !== "已掌握") ||
+					(active === "已掌握" && isMastered);
+				el.classList.toggle("hidden", !show);
+			});
+
+			document.querySelectorAll(".review-tab").forEach((tab) => {
+				tab.dataset.active = tab.dataset.filter === active ? "true" : "";
+			});
+		};
+
+		const applyGrade = (el, grade) => {
+			const slug = el.closest(".review-card").dataset.slug;
+			const due = read(KEY_DUE, {});
+			const mastered = read(KEY_MASTER, []);
+			if (grade === "again") due[slug] = Date.now() + DAY;
+			else if (grade === "good") due[slug] = Date.now() + 7 * DAY;
+			else if (grade === "master" && !mastered.includes(slug)) mastered.push(slug);
+			write(KEY_DUE, due);
+			write(KEY_MASTER, mastered);
+			render();
+		};
+
+		document.addEventListener("click", (e) => {
+			const reveal = e.target.closest(".review-reveal");
+			if (reveal) {
+				const card = reveal.closest(".review-card");
+				const answer = card.querySelector(".review-answer");
+				answer.classList.toggle("hidden");
+				reveal.textContent = answer.classList.contains("hidden") ? "显示答案" : "收起答案";
+				reveal.classList.toggle("hidden", !answer.classList.contains("hidden"));
+				return;
+			}
+			const grade = e.target.closest(".review-grade");
+			if (grade) {
+				applyGrade(grade, grade.dataset.grade);
+				return;
+			}
+			const tab = e.target.closest(".review-tab");
+			if (tab) {
+				document.querySelectorAll(".review-tab").forEach((t) => delete t.dataset.active);
+				tab.dataset.active = "true";
+				render();
+				return;
+			}
+			const reset = e.target.closest("#review-reset");
+			if (reset) {
+				localStorage.removeItem(KEY_DUE);
+				localStorage.removeItem(KEY_MASTER);
+				render();
+			}
+		});
+
+		document.addEventListener("DOMContentLoaded", render);
+		if (document.readyState !== "loading") render();
+		document.addEventListener("swup:contentReplaced", render);
+	})();
+</script>
+
+<style is:global>
+	.review-tab[data-active] {
+		background: var(--primary);
+		color: var(--primary-contrast);
+	}
+	.review-reveal {
+		background: var(--primary);
+		color: var(--primary-contrast);
+	}
+	.review-grade {
+		border: 1px solid var(--line-color);
+	}
+	.review-grade:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+	.review-card.hidden {
+		display: none;
+	}
+</style>

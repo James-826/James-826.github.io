@@ -21,10 +21,21 @@ const postsCollection = defineCollection({
 		nextSlug: z.string().default(""),
 	}),
 });
+const cardsCollection = defineCollection({
+	schema: z.object({
+		question: z.string(),
+		answer: z.string(),
+		post: z.string().optional().default(""),
+		tags: z.array(z.string()).optional().default([]),
+		status: z.string().optional().default("待复习"),
+		created: z.date().optional(),
+	}),
+});
 const specCollection = defineCollection({
 	schema: z.object({}),
 });
 export const collections = {
 	posts: postsCollection,
+	cards: cardsCollection,
 	spec: specCollection,
 };

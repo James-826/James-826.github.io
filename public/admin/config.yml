@@ -47,3 +47,24 @@ collections:
           - { label: 简体中文, value: zh_CN }
           - { label: English, value: en }
       - { label: 正文, name: body, widget: markdown }
+
+  - name: cards
+    label: 复习卡片
+    label_singular: 卡片
+    folder: src/content/cards
+    create: true
+    extension: md
+    format: yaml-frontmatter
+    slug: "{{slug}}"
+    summary: "{{question}}"
+    sortable_fields: [created, status]
+    view_filters:
+      - { label: 待复习, field: status, pattern: 待复习 }
+      - { label: 已掌握, field: status, pattern: 已掌握 }
+    fields:
+      - { label: 问题, name: question, widget: text }
+      - { label: 答案, name: answer, widget: markdown }
+      - { label: 关联文章 slug, name: post, widget: string, required: false, default: "" }
+      - { label: 标签, name: tags, widget: list, required: false, default: [], field: { label: 标签, name: tag, widget: string } }
+      - { label: 状态, name: status, widget: select, required: false, default: 待复习, options: [待复习, 学习中, 已掌握] }
+      - { label: 创建时间, name: created, widget: datetime, format: YYYY-MM-DD, date_format: YYYY-MM-DD, time_format: false, required: false }

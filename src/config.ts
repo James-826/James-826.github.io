@@ -46,6 +46,10 @@ export const navBarConfig: NavBarConfig = {
 			name: "项目",
 			url: "/projects/",
 		},
+		{
+			name: "回顾",
+			url: "/review/",
+		},
 		LinkPreset.Archive,
 		LinkPreset.About,
 		{
