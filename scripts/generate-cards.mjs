@@ -39,6 +39,17 @@ function changedPostPaths() {
   }
 }
 
+function boldPoints(body) {
+  const points = [];
+  const re = /\*\*([^*]+)\*\*/g;
+  let match;
+  while ((match = re.exec(body))) {
+    const text = match[1].trim();
+    if (text.length >= 2 && !points.includes(text)) points.push(text);
+  }
+  return points;
+}
+
 function parsePost(filePath) {
   const raw = readFileSync(filePath, "utf8");
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
@@ -47,7 +58,8 @@ function parsePost(filePath) {
     const t = m[1].match(/^title:\s*(.+)$/m);
     if (t) title = t[1].trim().replace(/^["']|["']$/g, "");
   }
-  return { title, body: m ? raw.slice(m[0].length) : raw };
+  const body = m ? raw.slice(m[0].length) : raw;
+  return { title, body, bold: boldPoints(body) };
 }
 
 function yaml(value) {
@@ -130,7 +142,7 @@ function extractJson(text) {
   throw new Error(`AI 响应中没有找到合法 JSON：${text.slice(0, 200).replace(/\s+/g, " ")}`);
 }
 
-async function askCards(title, body) {
+async function askCards(title, body, bold = []) {
   const prompt = [
     "你是一位经验丰富的知识整理专家。请阅读下面的博客文章，提炼出 3-5 个最重要的知识点，生成「主动回忆式」复习卡片。",
     "",
@@ -138,15 +150,23 @@ async function askCards(title, body) {
     "1. 先在心里概括文章的核心论点与主线；",
     "2. 只从核心论点、关键概念、重要结论中挑选知识点；",
     "3. 为每个知识点生成一张卡片。",
-    "",
+    ...(bold.length > 0
+      ? [
+          "",
+          "作者用加粗标出了文章重点（按出现顺序）：",
+          bold.slice(0, 24).join("；"),
+          "提炼卡片时必须优先覆盖这些加粗重点，大部分卡片应从其中产生；其余卡片再从正文其他核心内容中选取。",
+        ]
+      : []),
     "要求：",
     "1. question 要短而有力，能触发主动回忆，不能把答案直接写进问题里，不要用选择题；",
     "2. answer 要准确、自包含、简洁（50-120 字），必须完全基于文章内容，不得臆造文章里没有的事实、数字或观点；",
-    "3. 宁可少而精，不要为了凑数量生成边角料知识点；",
-    `4. category 必须从以下选项里选一个最合适的：${ALLOWED_CATEGORIES.join("、")}；`,
-    "5. tags 给 1-4 个简短标签；",
-    "6. source 是答案所依据的文章原文关键词或短句（1-3 个），必须是文章里原样出现过的文字，供机器校验；",
-    "7. 只输出一个 JSON 对象，不要输出任何其他文字，格式：",
+    "3. 深度要求（最重要）：知识点必须指向文章里具体、可检验的细节——机制原理、执行流程、分类条目、训练方法、对比区别、关键参数或易错点；问题要具体到「怎么做 / 有哪几种 / 如何训练 / 执行顺序 / 与 X 的区别」，禁止泛泛地问「X 是什么 / 有什么用 / 为什么需要」，禁止答案只有常识或显而易见的内容（如「把文字转成数字」这类没信息量的话）；",
+    "4. 宁可少而精，不要为了凑数量生成边角料知识点；",
+    `5. category 必须从以下选项里选一个最合适的：${ALLOWED_CATEGORIES.join("、")}；`,
+    "6. tags 给 1-4 个简短标签；",
+    "7. source 是答案所依据的文章原文关键词或短句（1-3 个），必须是文章里原样出现过的文字，供机器校验；",
+    "8. 只输出一个 JSON 对象，不要输出任何其他文字，格式：",
     '{"cards":[{"question":"...","answer":"...","category":"...","tags":["..."],"source":["..."]}]}',
     "",
     `文章标题：${title}`,
@@ -180,22 +200,32 @@ async function askCards(title, body) {
     }));
 }
 
-async function verifyCards(title, body, cards) {
+async function verifyCards(title, body, cards, bold = []) {
   const prompt = [
     "你是一位严格的复习卡片审核员。下面有一篇文章和根据它生成的复习卡片，请逐张审核。",
     "",
     "审核标准：",
     "1. 核心性：该知识点是否是文章的核心内容（核心论点、关键概念、重要结论），而不是边角料或与主题无关的内容；",
     "2. 准确性：答案是否准确、自包含，且完全由文章内容支撑，没有臆造、夸大或过度推断；",
-    "3. 回忆价值：问题是否适合主动回忆复习。",
+    "3. 回忆价值：问题是否适合主动回忆复习；",
+    "4. 深度（最重要）：问题是否要求回忆具体机制、执行流程、分类条目、训练方法、对比区别、关键参数或易错点？「X 是什么 / 用来干什么」这类定义性问题，或答案只有常识、没有文章特有细节的问题，一律 keep=false；",
+    "5. depth 打分：1-5 分——1=废话/常识，2=纯定义，3=有部分细节，4=具体机制/步骤/分类，5=深入细节；只有 depth>=4 才允许 keep=true。",
     "",
-    '只输出 JSON，格式：{"results":[{"index":0,"keep":true,"reason":"一句话理由"}]}',
+    '只输出 JSON，格式：{"results":[{"index":0,"keep":true,"depth":4,"reason":"一句话理由"}]}',
     "keep=true 表示通过审核。宁可少留，也不要放过不准确或非核心的卡片。",
     "",
     `文章标题：${title}`,
     "文章正文（可能被截断）：",
     body.slice(0, 8000),
     "",
+    ...(bold.length > 0
+      ? [
+          "",
+          "作者加粗的重点（按出现顺序）：",
+          bold.slice(0, 24).join("；"),
+          "加粗内容应视为作者声明的核心，相关卡片不应以「非核心」为由被拒绝。",
+        ]
+      : []),
     "待审核卡片：",
     JSON.stringify(cards.map((c, i) => ({ index: i, question: c.question, answer: c.answer, category: c.category, tags: c.tags, source: c.source })), null, 2),
   ].join("\n");
@@ -204,14 +234,19 @@ async function verifyCards(title, body, cards) {
   const keep = new Set();
   const reasons = {};
   const rawKeep = {};
+  const depths = {};
   for (const r of results) {
     if (r && typeof r.index === "number") {
       rawKeep[r.index] = r.keep;
-      if (r.keep === true || r.keep === "true" || r.keep === 1) keep.add(r.index);
+      const keepVal = r.keep === true || r.keep === "true" || r.keep === 1;
+      const depth = Number.parseInt(r.depth, 10);
+      const depthOk = Number.isNaN(depth) ? true : depth >= 4;
+      if (keepVal && depthOk) keep.add(r.index);
+      depths[r.index] = Number.isNaN(depth) ? null : depth;
       if (typeof r.reason === "string") reasons[r.index] = r.reason;
     }
   }
-  return { keep, reasons, rawKeep };
+  return { keep, reasons, rawKeep, depths };
 }
 
 function normText(s) {
@@ -269,15 +304,15 @@ function main() {
           console.log(`⏭  ${target.slug}：已有 ${existing.length} 张卡片，跳过（用 --force 重新生成）`);
           return;
         }
-        const { title, body } = parsePost(target.path);
+        const { title, body, bold } = parsePost(target.path);
 
-        const cards = await askCards(title || target.slug, body);
+        const cards = await askCards(title || target.slug, body, bold);
         if (cards.length === 0) {
           console.log(`✗ ${target.slug}：AI 没有返回有效卡片`);
           return;
         }
 
-        const { keep, reasons, rawKeep } = await verifyCards(title || target.slug, body, cards);
+        const { keep, reasons, rawKeep, depths } = await verifyCards(title || target.slug, body, cards, bold);
         const passed = cards.filter((c, i) => keep.has(i));
         const groundedPassed = passed.filter((c) => grounded(c, body));
         const dropped = cards.filter((c, i) => !keep.has(i) || !grounded(c, body));
@@ -290,7 +325,7 @@ function main() {
             if (keep.has(idx)) {
               console.log(`   ✗ 原文校验未命中 ${c.question.slice(0, 40)} source=${JSON.stringify(c.source)}`);
             } else {
-              console.log(`   ✗ 审核拒绝 keep=${JSON.stringify(rawKeep[idx])} ${c.question.slice(0, 40)} — ${reasons[idx] ?? "未给理由"}`);
+              console.log(`   ✗ 审核拒绝 keep=${JSON.stringify(rawKeep[idx])} depth=${depths[idx] ?? "-"} ${c.question.slice(0, 40)} — ${reasons[idx] ?? "未给理由"}`);
             }
           }
         }

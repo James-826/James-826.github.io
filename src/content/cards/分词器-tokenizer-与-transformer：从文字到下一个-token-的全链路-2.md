@@ -1,12 +1,12 @@
 ---
-question: "分词器映射出的 ids 是否直接包含词义？"
-answer: "不包含。词表只是 id 与子词字符串的“门牌号字典”，真正的含义存在于 Embedding 矩阵中。模型吃的是对应行的高维向量，而非字符串或 id 本身，ids 仅作为查表索引。"
+question: "word-based、character-based、subword三种分词方式各自的核心缺陷是什么？"
+answer: "word-based：词表太大（英语50万+）、生词打成[UNK]丢失信息、不同词间无语义关系；character-based：词表极小但单字符无语义、序列超长算力翻倍；subword（BPE/WordPiece）：折中方案，常用词整体保留，生僻长词拆成有意义碎片，词表约3万。"
 post: "分词器-tokenizer-与-transformer：从文字到下一个-token-的全链路"
 category: "AI 与机器学习"
 tags:
-  - "Embedding"
-  - "向量"
-  - "词表"
+  - "分词器"
+  - "分词方式"
+  - "对比"
 status: 待复习
 created: 2026-08-10
 ---

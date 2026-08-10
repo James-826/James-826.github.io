@@ -1,11 +1,13 @@
 ---
-question: "OAuth 协议中 token 和 client_secret 的分工原则是什么？"
-answer: "token 存在浏览器中，短期有效且权限有限，泄露后果可控；client_secret 存在云端 Worker 中，长期有效且权限更高，泄露会导致灾难性后果，体现分层安全设计。"
+question: "OAuth中token与client_secret的存储位置和分工有何不同？"
+answer: "token存在浏览器（短有效期，权限小，泄露可控），client_secret存在Cloudflare Workers云端（长期有效，泄露灾难）。密钥负责换token，token用于实际操作。"
 post: "从本地-commit-推送到-cms-后台发布：我给自己博客做了次升级"
-category: "AI 与机器学习"
+category: "编程与工具"
 tags:
   - "OAuth"
-  - "安全设计"
+  - "token"
+  - "client_secret"
+  - "Cloudflare Workers"
 status: 待复习
 created: 2026-08-10
 ---

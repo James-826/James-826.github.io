@@ -119,10 +119,13 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 </MainGridLayout>
 
 <script is:inline>
-	(() => {
+(() => {
 		const DAY = 24 * 60 * 60 * 1000;
-		const KEY_DUE = "review.due.v1";
-		const KEY_MASTER = "review.master.v1";
+		const KEY_SCHED = "review.sched.v1";
+		const KEY_DUE_OLD = "review.due.v1";
+		const KEY_MASTER_OLD = "review.master.v1";
+		// 艾宾浩斯遗忘曲线复习间隔（天）：1 → 2 → 4 → 7 → 15 → 30 → 60 → 120
+		const INTERVALS = [1, 2, 4, 7, 15, 30, 60, 120];
 		const read = (key, fallback) => {
 			try {
 				const value = JSON.parse(localStorage.getItem(key));
@@ -135,25 +138,50 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 		const fmt = (ts) => new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 		const state = { status: "到期", category: "全部" };
 
-		const isMastered = (card) => card.dataset.status === "已掌握" || read(KEY_MASTER, []).includes(card.dataset.slug);
+		// 进度存储：{ slug: { reps, interval, due, status } }
+		const sched = read(KEY_SCHED, {});
+		// 迁移旧版数据（review.due.v1 / review.master.v1）
+		for (const [slug, ts] of Object.entries(read(KEY_DUE_OLD, {}))) {
+			if (!sched[slug] && typeof ts === "number") {
+				sched[slug] = { reps: 1, interval: 7, due: ts, status: "学习中" };
+			}
+		}
+		for (const slug of read(KEY_MASTER_OLD, [])) {
+			if (!sched[slug]) sched[slug] = { reps: INTERVALS.length, interval: 0, due: 0, status: "已掌握" };
+		}
+		const save = () => write(KEY_SCHED, sched);
+
+		const getStatus = (card) => {
+			const entry = sched[card.dataset.slug];
+			if (entry?.status === "已掌握") return "已掌握";
+			return entry?.status || card.dataset.status;
+		};
+		const isMastered = (card) => getStatus(card) === "已掌握";
 		const isDue = (card) => {
 			if (isMastered(card)) return false;
-			const next = read(KEY_DUE, {})[card.dataset.slug];
-			return !next || next <= Date.now();
+			const entry = sched[card.dataset.slug];
+			return !entry?.due || entry.due <= Date.now();
 		};
+		const daysUntil = (ts) => Math.ceil((ts - Date.now()) / DAY);
 
 		const updateCard = (card) => {
 			const badge = card.querySelector('[data-role="status-badge"]');
 			const next = card.querySelector('[data-role="next"]');
-			if (isMastered(card)) {
+			const status = getStatus(card);
+			const entry = sched[card.dataset.slug];
+			if (status === "已掌握") {
 				badge.textContent = "✓ 已掌握";
 				badge.classList.add("is-mastered");
 				next.textContent = "已掌握";
+				return;
+			}
+			badge.textContent = status;
+			badge.classList.remove("is-mastered");
+			if (entry?.due && entry.due > Date.now()) {
+				const days = daysUntil(entry.due);
+				next.textContent = `下次 ${fmt(entry.due)}（${days} 天后）`;
 			} else {
-				badge.textContent = card.dataset.status;
-				badge.classList.remove("is-mastered");
-				const dueAt = read(KEY_DUE, {})[card.dataset.slug];
-				next.textContent = dueAt ? `下次 ${fmt(dueAt)}` : "今日到期";
+				next.textContent = "今日到期";
 			}
 		};
 
@@ -165,8 +193,9 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 			if (stats) {
 				const dueCount = cards.filter(isDue).length;
 				const masterCount = cards.filter(isMastered).length;
+				const learningCount = cards.filter((card) => getStatus(card) === "学习中").length;
 				const percent = cards.length ? Math.round((masterCount / cards.length) * 100) : 0;
-				stats.textContent = `今日到期 ${dueCount} · 全部 ${cards.length} · 已掌握 ${percent}%`;
+				stats.textContent = `今日到期 ${dueCount} · 学习中 ${learningCount} · 全部 ${cards.length} · 已掌握 ${percent}%`;
 			}
 
 			let visibleCount = 0;
@@ -177,7 +206,7 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 				if (state.status === "到期") statusOk = isDue(card);
 				else if (state.status === "全部") statusOk = true;
 				else if (state.status === "已掌握") statusOk = mastered;
-				else statusOk = card.dataset.status === state.status && !mastered;
+				else statusOk = getStatus(card) === state.status;
 				const show = categoryOk && statusOk;
 				card.classList.toggle("hidden", !show);
 				if (show) visibleCount++;
@@ -209,13 +238,27 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 		const applyGrade = (gradeButton, grade) => {
 			const card = gradeButton.closest(".review-card");
 			const slug = card.dataset.slug;
-			const due = read(KEY_DUE, {});
-			const mastered = read(KEY_MASTER, []);
-			if (grade === "again") due[slug] = Date.now() + DAY;
-			else if (grade === "good") due[slug] = Date.now() + 7 * DAY;
-			else if (grade === "master" && !mastered.includes(slug)) mastered.push(slug);
-			write(KEY_DUE, due);
-			write(KEY_MASTER, mastered);
+			const entry = sched[slug] ?? { reps: 0, interval: INTERVALS[0], due: 0, status: "待复习" };
+			if (grade === "again") {
+				// 没记住：回到第 1 轮，1 天后重来
+				entry.reps = 0;
+				entry.interval = INTERVALS[0];
+				entry.status = "待复习";
+				entry.due = Date.now() + INTERVALS[0] * DAY;
+			} else if (grade === "good") {
+				// 记住了：进入下一轮，按艾宾浩斯间隔拉长
+				entry.reps = Math.min(entry.reps + 1, INTERVALS.length - 1);
+				entry.interval = INTERVALS[entry.reps];
+				entry.status = entry.reps >= 1 ? "学习中" : "待复习";
+				entry.due = Date.now() + entry.interval * DAY;
+			} else if (grade === "master") {
+				entry.reps = INTERVALS.length;
+				entry.interval = 0;
+				entry.status = "已掌握";
+				entry.due = 0;
+			}
+			sched[slug] = entry;
+			save();
 			updateAll();
 		};
 
@@ -261,8 +304,10 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 						reset.classList.remove("is-armed");
 					}, 3000);
 				} else {
-					localStorage.removeItem(KEY_DUE);
-					localStorage.removeItem(KEY_MASTER);
+					localStorage.removeItem(KEY_SCHED);
+					localStorage.removeItem(KEY_DUE_OLD);
+					localStorage.removeItem(KEY_MASTER_OLD);
+					for (const slug of Object.keys(sched)) delete sched[slug];
 					resetArmed = false;
 					reset.textContent = "重置进度";
 					reset.classList.remove("is-armed");
@@ -297,8 +342,8 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 	}
 	.review-tab.is-active,
 	.review-cat.is-active {
-		background: var(--primary);
-		color: var(--primary-contrast);
+		background: color-mix(in srgb, var(--primary) 14%, transparent);
+		color: var(--primary);
 		opacity: 1;
 	}
 	.review-reset.is-armed {
@@ -364,16 +409,18 @@ const statusTabs = ["到期", "全部", "待复习", "学习中", "已掌握"];
 	}
 
 	.review-reveal {
-		background: var(--primary);
-		color: var(--primary-contrast);
+		background: color-mix(in srgb, var(--primary) 14%, transparent);
+		color: var(--primary);
 		border-radius: 9999px;
 		padding: 0.4rem 1.1rem;
 		font-size: 0.75em;
 		font-weight: 500;
-		transition: opacity 0.2s;
+		border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+		transition: background-color 0.2s, opacity 0.2s;
 	}
 	.review-reveal:hover {
-		opacity: 0.88;
+		background: color-mix(in srgb, var(--primary) 22%, transparent);
+		opacity: 1;
 	}
 
 	.review-answer {

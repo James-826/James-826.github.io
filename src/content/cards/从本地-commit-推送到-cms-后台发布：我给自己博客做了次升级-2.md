@@ -1,11 +1,12 @@
 ---
-question: "Decap CMS 如何简化博客发布流程？"
-answer: "通过网页后台直接编辑文章并点击发布，Decap CMS 会自动将内容提交到仓库，替代手动 git commit 和 push 操作，后续 GitHub Actions 自动完成构建部署。"
+question: "Decap CMS发布文章时如何替代手动git操作？"
+answer: "Decap CMS将内容自动写成md文件并提交到仓库，相当于替你执行commit和push，后续GitHub Actions自动构建部署。"
 post: "从本地-commit-推送到-cms-后台发布：我给自己博客做了次升级"
 category: "编程与工具"
 tags:
-  - "CMS"
-  - "自动化部署"
+  - "Decap CMS"
+  - "提交到仓库"
+  - "GitHub Actions"
 status: 待复习
 created: 2026-08-10
 ---

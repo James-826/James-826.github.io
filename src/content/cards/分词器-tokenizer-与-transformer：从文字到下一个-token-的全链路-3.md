@@ -1,12 +1,13 @@
 ---
-question: "自注意力中 Q/K/V 的角色及除以 √d 的原因？"
-answer: "Q 负责查询，K 负责匹配标签，V 负责贡献内容。Q·K 计算相关性分数，加权 V 融合上下文。除以 √d 是为了防止点积方差随维度增长导致 Softmax 饱和和梯度消失，确保数值稳定可学习。"
+question: "分词器的'解码'和Transformer的'解码器'有什么区别？"
+answer: "分词器的解码（decode()）是把数字id映射回文字字符串，纯给人看的显示，不参与任何计算。Transformer的解码器（Decoder）是架构模块（如GPT的Decoder-only），内含带Mask的自注意力。两者名字撞了但完全不是一回事。"
 post: "分词器-tokenizer-与-transformer：从文字到下一个-token-的全链路"
 category: "AI 与机器学习"
 tags:
-  - "自注意力"
-  - "QKV"
-  - "梯度消失"
+  - "分词器"
+  - "Transformer"
+  - "解码器"
+  - "易错点"
 status: 待复习
 created: 2026-08-10
 ---
