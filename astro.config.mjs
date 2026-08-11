@@ -47,6 +47,9 @@ export default defineConfig({
 			updateHead: true,
 			updateBodyClass: false,
 			globalInstance: true,
+			// review 页交互脚本由 Astro 输出在 main 容器之外，SPA 切换会丢失脚本导致页面无法交互，
+			// 因此复习页强制整页加载。
+			ignore: ["/review/"],
 		}),
 		icon({
 			include: {

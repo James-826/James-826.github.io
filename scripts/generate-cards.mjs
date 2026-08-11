@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { slug as githubSlug } from "github-slugger";
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,7 +85,21 @@ function cardContent(postSlug, card) {
   return lines.join("\n");
 }
 
-async function callLLM(prompt, maxTokens) {
+async function callLLM(prompt, maxTokens, retries = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await callLLMOnce(prompt, maxTokens);
+    } catch (err) {
+      lastErr = err;
+      console.error(`  ? ? ${attempt}/${retries} ??????${err.message.slice(0, 200)}`);
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
+async function callLLMOnce(prompt, maxTokens) {
   const resp = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -173,17 +188,29 @@ async function askCards(title, body, bold = []) {
     "文章正文（可能被截断）：",
     body.slice(0, 8000),
   ].join("\n");
-  const parsed = await callLLM(prompt, 8000);
-  const cards = Array.isArray(parsed?.cards) ? parsed.cards : [];
-  return cards
-    .filter(
+  let parsed = null;
+  let cards = [];
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    parsed = await callLLM(prompt, 8000);
+    const raw = Array.isArray(parsed?.cards) ? parsed.cards : [];
+    cards = raw.filter(
       (c) =>
         c &&
         typeof c.question === "string" &&
         c.question.trim() &&
         typeof c.answer === "string" &&
         c.answer.trim(),
-    )
+    );
+    if (cards.length > 0) break;
+    console.error(`  ? ? ${attempt} ???????????????`);
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 1500 * attempt));
+  }
+  if (cards.length === 0) {
+    const snippet =
+      typeof parsed === "string" ? parsed.slice(0, 300) : JSON.stringify(parsed ?? {}).slice(0, 300);
+    console.error(`  ???????${snippet.replace(/\s+/g, " ")}`);
+  }
+  return cards
     .slice(0, maxCards)
     .map((c) => ({
       question: c.question.trim().replace(/\s*\n\s*/g, " "),
@@ -278,6 +305,15 @@ function existingCards() {
     });
 }
 
+function resolvePostSlug(arg) {
+  if (existsSync(join(POSTS_DIR, `${arg}.md`))) return arg;
+  const norm = githubSlug(arg);
+  const match = readdirSync(POSTS_DIR)
+    .filter((f) => f.endsWith(".md"))
+    .find((f) => githubSlug(f.slice(0, -3)) === norm);
+  return match ? match.slice(0, -3) : null;
+}
+
 function main() {
   mkdirSync(CARDS_DIR, { recursive: true });
   const index = existingCards();
@@ -288,8 +324,9 @@ function main() {
       ? slugArgs
       : changedPostPaths().map((p) => basename(p, ".md"));
   const targets = slugs
-    .filter((s) => s && existsSync(join(POSTS_DIR, `${s}.md`)))
-    .map((s) => ({ slug: s, path: join(POSTS_DIR, `${s}.md`) }));
+    .map(resolvePostSlug)
+    .filter((s) => s)
+    .map((s) => ({ slug: s, postSlug: githubSlug(s), path: join(POSTS_DIR, `${s}.md`) }));
 
   if (targets.length === 0) {
     console.log("没有需要处理的文章（未检测到新的文章推送）。");
@@ -299,7 +336,7 @@ function main() {
   for (const target of targets) {
     (async () => {
       try {
-        const existing = index.filter((c) => c.post === target.slug);
+        const existing = index.filter((c) => githubSlug(c.post) === target.postSlug);
         if (existing.length > 0 && !force) {
           console.log(`⏭  ${target.slug}：已有 ${existing.length} 张卡片，跳过（用 --force 重新生成）`);
           return;
@@ -344,14 +381,14 @@ function main() {
         }
 
         if (force && !dryRun) {
-          for (const f of index.filter((c) => c.post === target.slug).map((c) => c.file)) {
+          for (const f of index.filter((c) => githubSlug(c.post) === target.postSlug).map((c) => c.file)) {
             unlinkSync(join(CARDS_DIR, f));
           }
         }
         const baseNumber = force ? 1 : existing.length + 1;
         for (let i = 0; i < fresh.length; i++) {
-          const file = `${target.slug}-${baseNumber + i}.md`;
-          if (!dryRun) writeFileSync(join(CARDS_DIR, file), cardContent(target.slug, fresh[i]), "utf8");
+          const file = `${target.postSlug}-${baseNumber + i}.md`;
+          if (!dryRun) writeFileSync(join(CARDS_DIR, file), cardContent(target.postSlug, fresh[i]), "utf8");
         }
         const prefix = dryRun ? "[dry-run] " : "";
         console.log(`✔ ${prefix}${target.slug}：生成 ${fresh.length} 张卡片（${title || ""}）`);
